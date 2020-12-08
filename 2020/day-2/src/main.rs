@@ -3,6 +3,10 @@
 use std::env;
 use std::fs;
 
+#[macro_use]
+extern crate lazy_static;
+use regex::Regex;
+
 #[derive(Debug)]
 struct Line<'a> {
     min: usize,
@@ -11,32 +15,18 @@ struct Line<'a> {
     password: &'a str,
 }
 
-fn split<'a>(s: &'a str, separators: &[char]) -> Vec<&'a str> {
-    let mut splits = Vec::with_capacity(separators.len() + 1);
-    let mut push_split = |split: &'a str| {
-        if split.len() > 0 {
-            splits.push(split)
-        }
-    };
-
-    let mut rest = s;
-    for &delimiter in separators {
-        let (left_split, right_split) = rest.split_once(delimiter).unwrap();
-        push_split(left_split);
-        rest = right_split
-    }
-    push_split(rest);
-
-    splits
-}
-
 fn line_from_str<'a>(s: &'a str) -> Line<'a> {
-    let splits = split(s, &['-', ' ', ':', ' ']);
+    lazy_static! {
+        static ref REGEX: Regex =
+            Regex::new(r"^(\d*)-(\d*) (.): (.*)$").unwrap();
+    }
 
-    let min = splits[0].parse::<usize>().unwrap();
-    let max = splits[1].parse::<usize>().unwrap();
-    let letter = splits[2].chars().next().unwrap();
-    let password = splits[3];
+    let captures = REGEX.captures(s).unwrap();
+
+    let min = captures.get(1).unwrap().as_str().parse::<usize>().unwrap();
+    let max = captures.get(2).unwrap().as_str().parse::<usize>().unwrap();
+    let letter = captures.get(3).unwrap().as_str().chars().next().unwrap();
+    let password = captures.get(4).unwrap().as_str();
 
     Line {
         min,
@@ -90,18 +80,4 @@ fn main() {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::split;
-    #[test]
-    fn split_test() {
-        let empty_strs: &[&str; 0] = &[];
-        assert_eq!(split("", &[]), empty_strs);
-        assert_eq!(split("1", &[]), &["1"]);
-        assert_eq!(split("1-", &['-']), &["1"]);
-        assert_eq!(split("1-2", &['-']), &["1", "2"]);
-        assert_eq!(split("-2", &['-']), &["2"]);
-        assert_eq!(split("1-2-3", &['-']), &["1", "2-3"]);
-        assert_eq!(split("1-2:3", &['-', ':']), &["1", "2", "3"]);
-        assert_eq!(split("1-2:3-4", &['-', ':', '-']), &["1", "2", "3", "4"]);
-    }
-}
+mod tests {}
