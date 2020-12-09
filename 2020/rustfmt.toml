@@ -20,6 +20,7 @@ where_single_line = false
 imports_indent = "Block"
 imports_layout = "Mixed"
 merge_imports = false
+group_imports = "Preserve"
 reorder_imports = true
 reorder_modules = true
 reorder_impl_items = false
