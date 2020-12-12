@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -56,13 +57,60 @@ fn recurse<'a>(bag_name: &'a str, bag_map: &'a BagMap) -> usize {
     }
 }
 
-fn solve(content: &str) {
+fn create_reverse_bag_map<'a>(normal_map: &'a BagMap) -> BagMap<'a> {
+    let mut reversed_bag_map = BagMap::new();
+
+    for (normal_key_name, normal_values) in normal_map {
+        let &reversed_value_name = normal_key_name;
+        for normal_value in normal_values {
+            let &(value_number, normal_value_name) = normal_value;
+            let reversed_key_name = normal_value_name;
+            let reversed_values = reversed_bag_map.entry(reversed_key_name).or_insert(vec![]);
+            reversed_values.push((value_number, reversed_value_name));
+        }
+    }
+
+    reversed_bag_map
+}
+
+fn recurse_part_1<'a>(start_bag_name: &'a str, bag_map: &'a BagMap, set: &mut HashSet<&'a str>) {
+    if set.contains(start_bag_name) {
+        return;
+    }
+
+    match bag_map.get(start_bag_name) {
+        None => return,
+        Some(next_bags) => {
+            for next_bag in next_bags {
+                let &(_, next_bag_name) = next_bag;
+                recurse_part_1(next_bag_name, bag_map, set);
+                set.insert(next_bag_name);
+            }
+        }
+    }
+}
+
+fn solve_part_1(content: &str) {
+    let normal_bag_map: HashMap<_, _> =
+        content.lines().map(|line| parse_bag_line(line)).collect();
+
+    let reversed_bag_map = create_reverse_bag_map(&normal_bag_map);
+
+    let start_bag_name = "shiny gold";
+    let mut set = HashSet::new();
+    recurse_part_1(start_bag_name, &reversed_bag_map, &mut set);
+
+    println!("Part 1: {}", set.len());
+}
+
+fn solve_part_2(content: &str) {
     let bag_map: HashMap<_, _> =
         content.lines().map(|line| parse_bag_line(line)).collect();
 
     let start_bag_name = "shiny gold";
     let count = recurse(start_bag_name, &bag_map);
-    println!("{}", count)
+    
+    println!("Part 2: {}", count)
 }
 
 fn main() {
@@ -75,7 +123,8 @@ fn main() {
     let content = fs::read_to_string(filename)
         .expect("Something went wrong reading the file");
 
-    solve(&content);
+    solve_part_1(&content);
+    solve_part_2(&content);
 }
 
 #[cfg(test)]
