@@ -1,103 +1,85 @@
-use std::{cmp::min, fs};
-use std::{collections::VecDeque, env};
+use std::env;
+use std::fs;
 
-use itertools::Itertools;
+type Cup = usize;
+type Cups = Vec<Cup>;
 
-type Cup = u64;
-type Cups = VecDeque<Cup>;
-
-fn parse_cups(content: &str) -> Cups {
-    content
+fn parse_cups(content: &str, minimum_number: usize) -> (Cup, Cups) {
+    let mut cups_vec: Cups = content
         .chars()
         .map(|c| c.to_string().parse().unwrap())
-        .collect()
-}
-
-fn pick_up_cups(cups: &mut Cups, current_cup_index: &mut usize) -> Cups {
-    let number_end_cups = min(3, cups.len() - *current_cup_index - 1);
-    let mut picked_up_cups: Cups = cups
-        .iter()
-        .copied()
-        .skip(*current_cup_index + 1)
-        .take(number_end_cups)
         .collect();
-    for _ in 0..number_end_cups {
-        cups.remove(*current_cup_index + 1);
+    while cups_vec.len() < minimum_number {
+        cups_vec.push(cups_vec.len() + 1);
     }
-    for _ in picked_up_cups.len()..3 {
-        let cup = cups.pop_front().unwrap();
-        picked_up_cups.push_back(cup);
-        *current_cup_index -= 1;
+    let first_cup = *cups_vec.first().unwrap();
+    let last_cup = *cups_vec.last().unwrap();
+    let mut cups = vec![0; cups_vec.len() + 1];
+    for next_index in 1..cups_vec.len() {
+        let next_cup = cups_vec[next_index];
+        let previous_cup = cups_vec[next_index - 1];
+        cups[previous_cup] = next_cup;
     }
-    picked_up_cups
+    cups[last_cup] = first_cup;
+    (first_cup, cups)
 }
 
-fn find_destination_cup(cups: &Cups, current_cup_index: usize) -> usize {
-    let min_cup = *cups.iter().min().unwrap();
-    let max_cup = *cups.iter().max().unwrap();
-    let mut destination_cup = cups[current_cup_index] - 1;
-    loop {
-        if destination_cup < min_cup {
-            destination_cup = max_cup;
-        }
-
-        if let Some(destination_cup_index) =
-            cups.iter().position(|cup| *cup == destination_cup)
-        {
-            return destination_cup_index;
-        }
-
-        destination_cup -= 1;
-    }
-}
-
-fn insert_cups(
-    cups: &mut Cups,
-    picked_up_cups: Cups,
-    destination_cup_index: usize,
-    current_cup_index: &mut usize,
-) {
-    let mut insert_index = destination_cup_index + 1;
-    for picked_up_cup in picked_up_cups {
-        cups.insert(insert_index, picked_up_cup);
-        if insert_index <= *current_cup_index {
-            *current_cup_index += 1;
-        }
-        insert_index += 1;
-    }
-}
-
-fn play_moves(cups: &mut Cups, number_moves: usize) {
-    let mut current_cup_index = 0;
+fn play_moves(cups: &mut Cups, start_cup: Cup, number_moves: usize) {
+    let mut current_cup = start_cup;
     for _ in 1..=number_moves {
-        let picked_up_cups = pick_up_cups(cups, &mut current_cup_index);
-        let destination_cup_index =
-            find_destination_cup(cups, current_cup_index);
-        insert_cups(
-            cups,
-            picked_up_cups,
-            destination_cup_index,
-            &mut current_cup_index,
-        );
-        current_cup_index = (current_cup_index + 1) % cups.len();
+        let picked_cup_1 = cups[current_cup];
+        let picked_cup_2 = cups[picked_cup_1];
+        let picked_cup_3 = cups[picked_cup_2];
+        let picked_cups = [picked_cup_1, picked_cup_2, picked_cup_3];
+
+        cups[current_cup] = cups[picked_cup_3];
+
+        let get_previous = |i| {
+            if i > 1 {
+                i - 1
+            } else {
+                cups.len() - 1
+            }
+        };
+        let mut destination_cup = get_previous(current_cup);
+        while picked_cups.contains(&destination_cup) {
+            destination_cup = get_previous(destination_cup);
+        }
+
+        cups[picked_cup_3] = cups[destination_cup];
+        cups[destination_cup] = picked_cup_1;
+
+        current_cup = cups[current_cup];
     }
 }
 
-fn get_labels_after_1(mut cups: Cups) -> String {
-    while *cups.front().unwrap() != 1 {
-        cups.rotate_left(1);
+fn get_labels_after_1(cups: Cups) -> String {
+    let mut labels = String::new();
+    let mut current_cup = 1;
+    while cups[current_cup] != 1 {
+        labels += &cups[current_cup].to_string();
+        current_cup = cups[current_cup]
     }
-    cups.iter().skip(1).map(Cup::to_string).join("")
+    labels
 }
 
 fn solve_part_1(content: &str) {
-    let mut cups = parse_cups(content);
-    play_moves(&mut cups, 100);
+    let (start_cup, mut cups) = parse_cups(content, 0);
+    play_moves(&mut cups, start_cup, 100);
     let labels = get_labels_after_1(cups);
     println!("Part 1: {}", labels);
 }
 
-fn solve_part_2(_content: &str) {}
+fn get_product_after_1(cups: Cups) -> Cup {
+    cups[1] * cups[cups[1]]
+}
+
+fn solve_part_2(content: &str) {
+    let (start_cup, mut cups) = parse_cups(content, 1000000);
+    play_moves(&mut cups, start_cup, 10000000);
+    let product = get_product_after_1(cups);
+    println!("Part 2: {}", product);
+}
 
 fn get_content(index: usize, default_filename: &str) -> String {
     let args: Vec<String> = env::args().collect();
