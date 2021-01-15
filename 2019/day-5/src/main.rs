@@ -49,6 +49,7 @@ enum Operation {
     BinOp(fn(Int, Int) -> Int),
     Input,
     Output,
+    Jump(fn(Int) -> bool),
     Stop,
 }
 
@@ -59,6 +60,10 @@ impl Operation {
             2 => Operation::BinOp(|l, r| l * r),
             3 => Operation::Input,
             4 => Operation::Output,
+            5 => Operation::Jump(|v| v != 0),
+            6 => Operation::Jump(|v| v == 0),
+            7 => Operation::BinOp(|l, r| (l < r) as Int),
+            8 => Operation::BinOp(|l, r| (l == r) as Int),
             99 => Operation::Stop,
             _ => panic!("Unrecognized opcode {}", operation_code),
         }
@@ -68,6 +73,7 @@ impl Operation {
             Operation::BinOp(_) => 3,
             Operation::Input => 1,
             Operation::Output => 1,
+            Operation::Jump(_) => 2,
             Operation::Stop => 0,
         }
     }
@@ -115,6 +121,8 @@ impl Instruction {
     }
 
     fn apply(&self, program: &mut Program) {
+        let instruction_pointer = program.instruction_pointer;
+
         match self.operation {
             Operation::BinOp(op) => {
                 let left_value = self.parameter_value(program, 0);
@@ -136,11 +144,23 @@ impl Instruction {
                 program.outputs.push_back(output);
             }
 
+            Operation::Jump(predicate) => {
+                let parameter = self.parameter_value(program, 0);
+                if predicate(parameter) {
+                    let destination = self.parameter_value(program, 1);
+                    program.instruction_pointer = destination as Address;
+                }
+            }
+
             Operation::Stop => {
                 program.keep_running = false;
             }
         }
-        program.instruction_pointer += self.operation.number_parameters() + 1;
+
+        if instruction_pointer == program.instruction_pointer {
+            let pointer_delta = self.operation.number_parameters() + 1;
+            program.instruction_pointer += pointer_delta;
+        }
     }
 }
 
@@ -184,7 +204,12 @@ fn solve_part_1(content: &str) {
     println!("Part 1: {}", program.outputs.back().unwrap());
 }
 
-fn solve_part_2(_content: &str) {}
+fn solve_part_2(content: &str) {
+    let mut program: Program = content.parse().unwrap();
+    program.inputs.push_back(5);
+    program = run_program(program);
+    println!("Part 1: {}", program.outputs.back().unwrap());
+}
 
 fn main() {
     let args = env::args().collect_vec();
