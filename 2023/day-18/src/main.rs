@@ -1,70 +1,39 @@
 use itertools::{Either, Itertools};
 use std::str::FromStr;
 
-const TILE_TERRAIN: char = '.';
-const TILE_TRENCH: char = '#';
-
 fn main() {
-    let input = include_str!("example.txt");
-    let trenches = parse_trenches(input);
-    let (initial_position, (number_rows, number_cols)) = find_grid_dimensions(&trenches);
-    let mut grid = vec![vec![TILE_TERRAIN; number_cols]; number_rows];
-    dig_grid(&mut grid, &trenches, initial_position);
+    let input = include_str!("input.txt");
+    let normal_trenches = parse_trenches(input);
+    let lagoon_area = compute_lagoon_area(&normal_trenches);
+    println!("Part 1: {}", lagoon_area);
+
+    let color_trenches = normal_trenches
+        .into_iter()
+        .map(Trench::into_color)
+        .collect_vec();
+    let lagoon_area = compute_lagoon_area(&color_trenches);
+    println!("Part 2: {}", lagoon_area);
 }
 
-fn dig_grid(grid: &mut Vec<Vec<char>>, trenches: &Vec<Trench>, initial_position: (usize, usize)) {
-    let mut digger_position = initial_position;
-    grid[digger_position.0][digger_position.1] = TILE_TRENCH;
+fn compute_lagoon_area(trenches: &[Trench]) -> isize {
+    let mut perimeter = 0;
+    let mut twice_area = 0;
+    let mut position = (0isize, 0isize);
 
     for trench in trenches {
-        for _ in 0..trench.length {
-            let op = trench.direction.move_position(digger_position);
-            if op.is_none() {
-                dbg!("au secours");
-            }
+        let direction_delta = trench.direction.delta();
+        let next_position = (
+            position.0 + trench.length * direction_delta.0,
+            position.1 + trench.length * direction_delta.1,
+        );
 
-            digger_position = op.expect("digger moved in invalid space");
+        perimeter += trench.length;
+        twice_area += position.0 * next_position.1 - position.1 * next_position.0;
 
-            let mut tile = grid
-                .get_mut(digger_position.0)
-                .and_then(|r| r.get_mut(digger_position.1))
-                .expect("digger moved outside of grid");
-
-            *tile = TILE_TRENCH;
-        }
+        position = next_position;
     }
-}
 
-fn find_grid_dimensions(trenches: &[Trench]) -> ((usize, usize), (usize, usize)) {
-    let (minimums, _, maximums) = trenches.iter().fold(
-        ((0isize, 0isize), (0isize, 0isize), (0isize, 0isize)),
-        |ranges, trench| {
-            let length = trench.length as isize;
-            let new_position = match trench.direction {
-                Direction::Up => (ranges.1 .0 - length, ranges.1 .1),
-                Direction::Down => (ranges.1 .0 + length, ranges.1 .1),
-                Direction::Left => (ranges.1 .0, ranges.1 .1 - length),
-                Direction::Right => (ranges.1 .0, ranges.1 .1 + length),
-            };
-            let new_minimums = (
-                ranges.0 .0.min(new_position.0),
-                ranges.0 .1.min(new_position.1),
-            );
-            let new_maximums = (
-                ranges.2 .0.max(new_position.0),
-                ranges.2 .1.max(new_position.1),
-            );
-            (new_minimums, new_position, new_maximums)
-        },
-    );
-
-    (
-        (minimums.0.abs() as usize + 1, minimums.1.abs() as usize + 1),
-        (
-            (minimums.0.abs() + maximums.0) as usize + 3,
-            (minimums.1.abs() + maximums.1) as usize + 3,
-        ),
-    )
+    (twice_area.abs() - perimeter + 2) / 2 + perimeter
 }
 
 fn parse_trenches(input: &str) -> Vec<Trench> {
@@ -86,7 +55,7 @@ fn parse_trenches(input: &str) -> Vec<Trench> {
                 color: split
                     .next()
                     .expect("trench color not in line")
-                    .strip_prefix("(")
+                    .strip_prefix("(#")
                     .expect("color not enclosed in parentheses")
                     .strip_suffix(")")
                     .expect("color not enclosed in parentheses")
@@ -99,25 +68,48 @@ fn parse_trenches(input: &str) -> Vec<Trench> {
 #[derive(Debug, Clone)]
 struct Trench {
     direction: Direction,
-    length: usize,
+    length: isize,
     color: String,
+}
+
+impl Trench {
+    fn into_color(self) -> Trench {
+        let length = isize::from_str_radix(&self.color[..5], 16).unwrap();
+        let direction = Direction::from_hex(&self.color[5..]).unwrap();
+        Self {
+            direction,
+            length,
+            ..self
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
 enum Direction {
-    Up,
+    Right,
     Down,
     Left,
-    Right,
+    Up,
 }
 
 impl Direction {
-    fn move_position(&self, position: (usize, usize)) -> Option<(usize, usize)> {
+    fn delta(&self) -> (isize, isize) {
         match self {
-            Direction::Up => position.0.checked_sub(1).map(|r| (r, position.1)),
-            Direction::Down => position.0.checked_add(1).map(|r| (r, position.1)),
-            Direction::Left => position.1.checked_sub(1).map(|c| (position.0, c)),
-            Direction::Right => position.1.checked_add(1).map(|c| (position.0, c)),
+            Direction::Right => (0, 1),
+            Direction::Down => (1, 0),
+            Direction::Left => (0, -1),
+            Direction::Up => (-1, 0),
+        }
+    }
+
+    fn from_hex(s: &str) -> Result<Self, <Self as FromStr>::Err> {
+        let c = s.parse::<char>().map_err(|e| Either::Left(e))?;
+        match c {
+            '0' => Ok(Direction::Right),
+            '1' => Ok(Direction::Down),
+            '2' => Ok(Direction::Left),
+            '3' => Ok(Direction::Up),
+            _ => Err(Either::Right("unrecognized hex char for direction")),
         }
     }
 }
@@ -128,10 +120,10 @@ impl FromStr for Direction {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let c = s.parse::<char>().map_err(|e| Either::Left(e))?;
         match c {
-            'U' => Ok(Direction::Up),
+            'R' => Ok(Direction::Right),
             'D' => Ok(Direction::Down),
             'L' => Ok(Direction::Left),
-            'R' => Ok(Direction::Right),
+            'U' => Ok(Direction::Up),
             _ => Err(Either::Right("unrecognized char for direction")),
         }
     }
